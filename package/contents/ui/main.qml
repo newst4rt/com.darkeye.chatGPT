@@ -6,7 +6,6 @@
 import QtQuick 2.3
 import QtQuick.Layouts 1.0
 import QtQuick.Controls 2.0
-import QtQuick.Dialogs 1.3
 import org.kde.plasma.core 2.0 as PlasmaCore
 import org.kde.plasma.components 3.0 as PlasmaComponents
 import org.kde.plasma.plasmoid 2.0
@@ -16,364 +15,299 @@ import org.kde.kirigami 2.19 as Kirigami
 import QtWebEngine 1.9
 
 Item {
-	id: root
-	property bool themeMismatch: false;
-	property int nextReloadTime: 0;
-	property int reloadRetries: 0;
-	property int maxReloadRetiries: 25;
-	property bool loadedsuccessfully:false;
+    id: root
+    property bool themeMismatch: false;
+    property int nextReloadTime: 0;
+    property int reloadRetries: 0;
+    property int maxReloadRetiries: 25;
+    property bool loadedsuccessfully:false;
 
-	Plasmoid.compactRepresentation: CompactRepresentation {}
+    Plasmoid.compactRepresentation: CompactRepresentation {}
 
-	Plasmoid.fullRepresentation: ColumnLayout {
-		anchors.fill: parent
+    Plasmoid.fullRepresentation: ColumnLayout {
+        anchors.fill: parent
 
-		Layout.minimumWidth: 256 * PlasmaCore.Units.devicePixelRatio
-		Layout.minimumHeight:  512 * PlasmaCore.Units.devicePixelRatio
-		Layout.preferredWidth: 520 * PlasmaCore.Units.devicePixelRatio
-		Layout.preferredHeight: 840 * PlasmaCore.Units.devicePixelRatio
+        Layout.minimumWidth: 256 * PlasmaCore.Units.devicePixelRatio
+        Layout.minimumHeight:  512 * PlasmaCore.Units.devicePixelRatio
+        Layout.preferredWidth: 520 * PlasmaCore.Units.devicePixelRatio
+        Layout.preferredHeight: 840 * PlasmaCore.Units.devicePixelRatio
 
-		//-----------------------------  Helpers --------------------------------------------
-		// Added workaround by @zontafil thank you!
-		
-		Timer {
-			id: exposeTimer
+        //-----------------------------  Helpers ------------------
+        // Added workaround by @zontafil thank you!
 
-			interval: plasmoid.configuration.focusInterval ? plasmoid.configuration.focusInterval : 0
-			running: false
-			onTriggered: {
-				gptWebView.forceActiveFocus();
-				gptWebView.focus=true;
-				gptWebView.runJavaScript("document.userScripts.setInputFocus();");
-				console.log("Plasmoid exposeTimer :"+plasmoid.expanded )
-			}
-		}
+        Timer {
+            id: exposeTimer
 
-		Timer {
-			id: reloadTimer
+            interval: plasmoid.configuration.focusInterval ? plasmoid.configuration.focusInterval : 0
+            running: false
+            onTriggered: {
+                gptWebView.forceActiveFocus();
+                gptWebView.focus=true;
+                gptWebView.runJavaScript("document.userScripts.setInputFocus();");
+                console.log("Plasmoid exposeTimer :"+plasmoid.expanded )
+            }
+        }
 
-			interval: 1000
-			running:  !plasmoid.expand
-			onTriggered: if(	!loadedsuccessfully &&
-								!plasmoid.expanded &&
-								Date.now() > root.nextReloadTime &&
-								root.reloadRetries < root.maxReloadRetiries ){
-					console.log("Failed to load ChatGPT page, reloading as we are hidden..");
-					root.reloadRetries +=1;
-					root.nextReloadTime = Math.min(Date.now() + 1000 * (2**root.reloadRetries) , plasmoid.configuration.maxReloadTime * 1000);
-					gptWebView.reload();
-			}
-		}
+        Timer {
+            id: reloadTimer
 
-		//-------------------------------------- Connections  &&  handlers ------------------------------------
+            interval: 1000
+            running:  !plasmoid.expand
+            onTriggered: if(	!loadedsuccessfully &&
+                                !plasmoid.expanded &&
+                                Date.now() > root.nextReloadTime &&
+                                root.reloadRetries < root.maxReloadRetiries ){
+                    console.log("Failed to load ChatGPT page, reloading as we are hidden..");
+                    root.reloadRetries +=1;
+                    root.nextReloadTime = Math.min(Date.now() + 1000 * (2**root.reloadRetries) , plasmoid.configuration.maxReloadTime * 1000);
+                    gptWebView.reload();
+            }
+        }
 
+        Connections {
+            target: plasmoid
+            function onActivated() {
+                console.log("Plasmoid revealed to user")
+            }
+            function onStatusChanged() {
+                console.log("Plasmoid status changed "+plasmoid.status)
+            }
+            function hideOnWindowDeactivateChanged() {
+                console.log("Plasmoid hideOnWindowDeactivateChanged changed")
+            }
+            function onExpandedChanged() {
+                if(gptWebView && plasmoid.expanded) {
+                    if(gptWebView.LoadStatus == WebEngineView.LoadFailedStatus) {
+                        gptWebView.reload();
+                    }
 
-		 Keys.onPressed: {
-			if (event.key === Qt.Key_F5 && gptWebView) {
-				gptWebView.reload();
-			}
-			// Prevent the event from propagating further
-			event.accepted = true;
-		}
+                    exposeTimer.start();
+                }
+                if(!plasmoid.expanded && root.themeMismatch && plasmoid.configuration.matchTheme ) {
+                    root.themeMismatch = false;
+                    gptWebView.reloadAndBypassCache();
+                }
+                console.log("Plasmoid onExpandedChanged :"+plasmoid.expanded )
+            }
+        }
 
+        //------------------------------------- UI -----------------------------------------
 
-		Connections {
-			target: plasmoid
-			function onActivated() {
-				console.log("Plasmoid revealed to user")
-			}
-			function onStatusChanged() {
-				console.log("Plasmoid status changed "+plasmoid.status)
-			}
-			function hideOnWindowDeactivateChanged() {
-				console.log("Plasmoid hideOnWindowDeactivateChanged changed")
-			}
-			function onExpandedChanged() {
-				if(gptWebView && plasmoid.expanded) {
-					if(gptWebView.LoadStatus == WebEngineView.LoadFailedStatus) {
-						gptWebView.reload();
-					}
+        ColumnLayout {
+            spacing: Kirigami.Units.mediumSpacing
 
-					exposeTimer.start();
-				}
-				if(!plasmoid.expanded && root.themeMismatch && plasmoid.configuration.matchTheme ) {
-					root.themeMismatch = false;
-					gptWebView.reloadAndBypassCache();
-				}
-				console.log("Plasmoid onExpandedChanged :"+plasmoid.expanded )
-			}
-		}
+            PlasmaExtras.PlasmoidHeading {
+                Layout.fillWidth: true
 
-		//------------------------------------- UI -----------------------------------------
+                ColumnLayout {
+                    anchors.fill: parent
+                    Layout.fillWidth: true
 
-		FileDialog {
-			id:fileDialog
-		}
+                    RowLayout {
+                        Layout.fillWidth: true
 
-		ColumnLayout {
-			spacing: Kirigami.Units.mediumSpacing
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: Kirigami.Units.mediumSpacing
 
-			PlasmaExtras.PlasmoidHeading {
-				Layout.fillWidth: true
+                            PlasmaComponents.ToolButton {
+                                text: i18n("Back to ChatGPT")
+                                visible: !gptWebView.url.toString().match(/chat\.openai\.com\/(|chat|auth)/);
+                                enabled: visible
+                                icon.name: "draw-arrow-back"
+                                display: PlasmaComponents.ToolButton.IconOnly
+                                PlasmaComponents.ToolTip.text: text
+                                PlasmaComponents.ToolTip.delay: Kirigami.Units.toolTipDelay
+                                PlasmaComponents.ToolTip.visible: hovered
+                                onClicked: gptWebView.url = "https://chat.openai.com/chat";
+                            }
 
-				ColumnLayout {					
-					anchors.fill: parent
-					Layout.fillWidth: true
+                            Kirigami.Heading {
+                                id: titleText
+                                Layout.alignment: Qt.AlignCenter
+                                Layout.fillWidth: true
+                                verticalAlignment: Text.AlignVCenter
+                                text: i18n("ChatGPT")
+                                color: theme.textColor
+                            }
+                        }
 
-					RowLayout {
-						Layout.fillWidth: true
+                        PlasmaComponents.ToolButton {
+                            text: i18n("Debug")
+                            checkable: true
+                            checked: gptWebViewInspector && gptWebViewInspector.enabled
+                            visible: Qt.application.arguments[0] == "plasmoidviewer" || plasmoid.configuration.debugConsole
+                            enabled: visible
+                            icon.name: "format-text-code"
+                            display: PlasmaComponents.ToolButton.IconOnly
+                            PlasmaComponents.ToolTip.text: text
+                            PlasmaComponents.ToolTip.delay: Kirigami.Units.toolTipDelay
+                            PlasmaComponents.ToolTip.visible: hovered
+                            onToggled: {
+                                gptWebViewInspector.visible = !gptWebViewInspector.visible;
+                                gptWebViewInspector.enabled = visible || gptWebViewInspector.visible
+                            }
+                        }
 
-						RowLayout {
-							Layout.fillWidth: true
-							spacing: Kirigami.Units.mediumSpacing
+                        PlasmaComponents.ToolButton {
+                            id: proButton
+                            checkable: true
+                            checked: proLinkContainer.visible
+                            text: i18n("Im a Pro")
+                            visible: gptWebView.url.toString().match(/chat\.openai\.com\/auth/);
+                            icon.name: "x-office-contact"
+                            display: PlasmaComponents.ToolButton.IconOnly
+                            PlasmaComponents.ToolTip.text: text
+                            PlasmaComponents.ToolTip.delay: Kirigami.Units.toolTipDelay
+                            PlasmaComponents.ToolTip.visible: hovered
+                            onToggled: proLinkContainer.visible = !proLinkContainer.visible;
+                        }
 
-							PlasmaComponents.ToolButton {
-								text: i18n("Back to ChatGPT")
-								visible: !gptWebView.url.toString().match(/chat\.openai\.com\/(|chat|auth)/);
-								enabled: visible
-								icon.name: "draw-arrow-back"
-								display: PlasmaComponents.ToolButton.IconOnly
-								PlasmaComponents.ToolTip.text: text
-								PlasmaComponents.ToolTip.delay: Kirigami.Units.toolTipDelay
-								PlasmaComponents.ToolTip.visible: hovered
-								onClicked: gptWebView.url = "https://chat.openai.com/chat";
-							}
+                        PlasmaComponents.ToolButton {
+                            id: refreshButton
+                            text: i18n("Reload")
+                            icon.name: "view-refresh"
+                            display: PlasmaComponents.ToolButton.IconOnly
+                            PlasmaComponents.ToolTip.text: text
+                            PlasmaComponents.ToolTip.delay: Kirigami.Units.toolTipDelay
+                            PlasmaComponents.ToolTip.visible: hovered
+                            onClicked: gptWebView.reload();
+                        }
 
-							Kirigami.Heading {
-								id: titleText
-								Layout.alignment: Qt.AlignCenter
-								Layout.fillWidth: true
-								verticalAlignment: Text.AlignVCenter
-								text: i18n("ChatGPT")
-								color: theme.textColor
-							}
-						}
+                        PlasmaComponents.ToolButton {
+                            id: pinButton
+                            checkable: true
+                            checked: plasmoid.configuration.pin
+                            icon.name: "window-pin"
+                            text: i18n("Keep Open")
+                            display: PlasmaComponents.ToolButton.IconOnly
+                            PlasmaComponents.ToolTip.text: text
+                            PlasmaComponents.ToolTip.delay: Kirigami.Units.toolTipDelay
+                            PlasmaComponents.ToolTip.visible: hovered
+                            onToggled: plasmoid.configuration.pin = checked
+                        }
+                    }
 
-						PlasmaComponents.ToolButton {
-							text: i18n("Debug")
-							checkable: true
-							checked: gptWebViewInspector && gptWebViewInspector.enabled
-							visible: Qt.application.arguments[0] == "plasmoidviewer" || plasmoid.configuration.debugConsole
-							enabled: visible
-							icon.name: "format-text-code"
-							display: PlasmaComponents.ToolButton.IconOnly
-							PlasmaComponents.ToolTip.text: text
-							PlasmaComponents.ToolTip.delay: Kirigami.Units.toolTipDelay
-							PlasmaComponents.ToolTip.visible: hovered
-							onToggled: {
-								gptWebViewInspector.visible = !gptWebViewInspector.visible;
-								gptWebViewInspector.enabled = visible || gptWebViewInspector.visible
-							}
-						}
+                    RowLayout {
+                        id: proLinkContainer
+                        Layout.fillWidth: true
+                        visible: false;
 
-						PlasmaComponents.ToolButton {
-							id: proButton
-							checkable: true
-							checked: proLinkContainer.visible
-							text: i18n("Im a Pro")
-							visible: gptWebView.url.toString().match(/chat\.openai\.com\/auth/);
-							icon.name: "x-office-contact"
-							display: PlasmaComponents.ToolButton.IconOnly
-							PlasmaComponents.ToolTip.text: text
-							PlasmaComponents.ToolTip.delay: Kirigami.Units.toolTipDelay
-							PlasmaComponents.ToolTip.visible: hovered
-							onToggled: proLinkContainer.visible = !proLinkContainer.visible;
-						}
+                        PlasmaComponents.TextField {
+                            id: proLinkField
 
-						PlasmaComponents.ToolButton {
-							id: refreshButton
-							text: i18n("Reload")
-							icon.name: "view-refresh"
-							display: PlasmaComponents.ToolButton.IconOnly
-							PlasmaComponents.ToolTip.text: text
-							PlasmaComponents.ToolTip.delay: Kirigami.Units.toolTipDelay
-							PlasmaComponents.ToolTip.visible: hovered
-							onClicked: gptWebView.reload();
-						}
+                            enabled: proLinkContainer.visible
+                            Layout.fillWidth: true
 
-						PlasmaComponents.ToolButton {
-							id: pinButton
-							checkable: true
-							checked: plasmoid.configuration.pin
-							icon.name: "window-pin"
-							text: i18n("Keep Open")
-							display: PlasmaComponents.ToolButton.IconOnly
-							PlasmaComponents.ToolTip.text: text
-							PlasmaComponents.ToolTip.delay: Kirigami.Units.toolTipDelay
-							PlasmaComponents.ToolTip.visible: hovered
-							onToggled: plasmoid.configuration.pin = checked
-						}
-					}
+                            placeholderText: i18n("Paste the accesss link that was send to your email.")
+                            text: ""
+                        }
 
-					RowLayout {
-						id: proLinkContainer
-						Layout.fillWidth: true
-						visible: false;
+                        PlasmaComponents.Button {
+                            enabled: proLinkContainer.visible
+                            icon.name: "go-next"
+                            onClicked:  {
+                                gptWebView.url = proLinkField.text;
+                                proLinkContainer.visible= false;
+                            }
+                        }
+                    }
+                }
+            }
 
-						PlasmaComponents.TextField {
-							id: proLinkField
+            //-------------------- Connections  -----------------------
 
-							enabled: proLinkContainer.visible
-							Layout.fillWidth: true
-
-							placeholderText: i18n("Paste the accesss link that was send to your email.")
-							text: ""
-						}
-
-						PlasmaComponents.Button {
-							enabled: proLinkContainer.visible
-							icon.name: "go-next"
-							onClicked:  {
-								gptWebView.url = proLinkField.text;
-								proLinkContainer.visible= false;
-							}
-						}
-					}
-				}
-			}
-
-			//-------------------- Connections  -----------------------
-
-			Binding {
-				target: plasmoid
-				property: "hideOnWindowDeactivate"
-				value: !plasmoid.configuration.pin
-			}
-		}
-
-		//-------------------------  Actual ChatGPT View --------------------------
-
-		WebEngineView {
-				// anchors.fill: parent
-				Layout.fillHeight: true
-				Layout.fillWidth: true
-
-				id: gptWebView
-				focus: true
-				url: "https://chat.openai.com/chat"
-
-				profile: WebEngineProfile {
-					id: chatGptProfile
-					storageName: "chat-gpt"
-					offTheRecord: false
-					httpCacheType: WebEngineProfile.DiskHttpCache
-					persistentCookiesPolicy: WebEngineProfile.ForcePersistentCookies
-					downloadPath: (plasmoid.configuration.downloadLocation ?
-										Qt.resolveUrl(plasmoid.configuration.downloadLocation) :
-										chatGptProfile.downloadPath) + "/"
-					userScripts: [
-						WebEngineScript {
-							injectionPoint: WebEngineScript.DocumentCreation
-							name: "helperFunctions"
-							worldId: WebEngineScript.MainWorld
-							sourceUrl: "./js/helper_functions.js"
-						}
-					]
-					onDownloadFinished: {
-						console.log("onDownloadFinished : " +download.downloadDirectory + download.downloadFileName);
-					}
-					onDownloadRequested : {
-						console.log("onDownloadRequested : " + download.downloadFileName);
-						if( plasmoid.configuration.downloadLocation ) {
-							download.downloadDirectory = chatGptProfile.downloadPath;
-							download.accept();
-							console.log("onDownloadRequested : downloaded to "+download.downloadDirectory);
-							console.log("onDownloadRequested : downloaded to "+plasmoid.configuration.downloadLocation );
-						} else {
-							console.log("onDownloadRequested : please configure a download location");
-						}
-					}
-				}
-
-				settings.javascriptCanAccessClipboard: plasmoid.configuration.allowClipboardAccess
-
-				onLoadingChanged: {
-					if(WebEngineView.LoadSucceededStatus === loadRequest.status) {
-						root.reloadRetries = 0;
-						let themeLightness = (isDark(theme.backgroundColor) ? 'dark' : 'light') ;
-
-						gptWebView.runJavaScript("document.userScripts.setConfig("+JSON.stringify(plasmoid.configuration)+");");
-						gptWebView.runJavaScript("document.userScripts.setSendOnEnter();");
-						gptWebView.runJavaScript("document.userScripts.getTheme();",function(theme) {
-							if( !plasmoid.expanded && plasmoid.configuration.matchTheme && (!theme ||  theme !== themeLightness)) {
-								gptWebView.runJavaScript("document.userScripts.setTheme('"+themeLightness+"');");
-								gptWebView.relreloadAndBypassCacheoad();
-							} else if(plasmoid.configuration.matchTheme && theme !== themeLightness) {
-								root.themeMismatch = true;
-							}
-						});
-						gptWebView.runJavaScript("document.userScripts.setTheme('"+themeLightness+"');");
-					}
+            Binding {
+                target: plasmoid
+                property: "hideOnWindowDeactivate"
+                value: !plasmoid.configuration.pin
+            }
+        }
 
 
-					loadedsuccessfully = 	( loadRequest.status == WebEngineLoadRequest.LoadSucceededStatus && (gptWebView.loadProgress == 100 || gptWebView.loadProgress == 0))
-										&&
-											( !gptWebView.loading )
+        WebEngineView {
+                // anchors.fill: parent
+                Layout.fillHeight: true
+                Layout.fillWidth: true
 
-				}
+                id: gptWebView
+                focus: true
+                url: "https://chat.openai.com/chat"
 
-				onFileDialogRequested: {
-					console.log("onFileDialogRequested");
-					//console.log(JSON.stringify(request));
-					fileDialog.title = "Choose File";
-					fileDialog.accept.connect(function (request){
-						request.dialogAccept(fileDialog.selectedFiles);
-					});
-					fileDialog.reject.connect(function(request) {
-						request.dialogReject()
-					});
-					fileDialog.open();
-					request.accepted = true
-				}
+                profile: WebEngineProfile {
+                    id: chatGptProfile
+                    storageName: "chat-gpt"
+                    offTheRecord: false
+                    httpCacheType: WebEngineProfile.DiskHttpCache
+                    persistentCookiesPolicy: WebEngineProfile.ForcePersistentCookies
+                    userScripts: [
+                        WebEngineScript {
+                            injectionPoint: WebEngineScript.DocumentCreation
+                            name: "helperFunctions"
+                            worldId: WebEngineScript.MainWorld
+                            sourceUrl: "./js/helper_functions.js"
+                        }
+                    ]
+                }
 
-				onJavaScriptDialogRequested : {
-					console.log("onJavaScriptDialogRequested");
-				}
+                settings.javascriptCanAccessClipboard: plasmoid.configuration.allowClipboardAccess
 
-				onNewViewRequested : {
-					console.log("onNewViewRequested");
-					if(request.requestedUrl.toString().match(/https?\:\/\/chat\.openai\.com/)) {
-						gptWebView.url = request.requestedUrl;
-						console.log(request.url);
-					} else {
-						Qt.openUrlExternally(request.url);
-						request.action = WebEngineNavigationRequest.IgnoreRequest;
-					}
-				}
+                onLoadingChanged: {
+                    if(WebEngineView.LoadSucceededStatus === loadRequest.status) {
+                        root.reloadRetries = 0;
+                        let themeLightness = (isDark(theme.backgroundColor) ? 'dark' : 'light') ;
 
-				onJavaScriptConsoleMessage: if( Qt.application.arguments[0].match(/plasmoidviewer/) ) {
-					console.log("Chat-GPT: " + message);
-				}
+                        gptWebView.runJavaScript("document.userScripts.setConfig("+JSON.stringify(plasmoid.configuration)+");");
+                        gptWebView.runJavaScript("document.userScripts.setSendOnEnter();");
+                        gptWebView.runJavaScript("loadCSS();");
+                        gptWebView.runJavaScript("document.userScripts.getTheme();",function(theme) {
+                            if( !plasmoid.expanded && plasmoid.configuration.matchTheme && (!theme ||  theme !== themeLightness)) {
+                                gptWebView.runJavaScript("document.userScripts.setTheme('"+themeLightness+"');");
+                                gptWebView.relreloadAndBypassCacheoad();
+                            } else if(plasmoid.configuration.matchTheme && theme !== themeLightness) {
+                                root.themeMismatch = true;
+                            }
+                        });
+                        gptWebView.runJavaScript("document.userScripts.setTheme('"+themeLightness+"');");
+                    }
 
-				onNavigationRequested: {
-					if(request.navigationType == WebEngineNavigationRequest.LinkClickedNavigation) {
-						if(request.url.toString().match(/https?\:\/\/chat\.openai\.com/)) {
-							gptWebView.url = request.url;
-							console.log(request.url);
-						} else {
-							Qt.openUrlExternally(request.url);
-							request.action = WebEngineNavigationRequest.IgnoreRequest;
-						}
-					}
-				}
 
-				function isDark(color) {
-					let luminance = 0.2126 * color.r + 0.7152 * color.g + 0.0722 * color.b;
-					return (luminance < 0.5);
-				}
-			}
-			WebEngineView {
-				id:gptWebViewInspector
-				enabled: false
-				visible: false
-				z:100
-				height:parent.height /2
+                    loadedsuccessfully = 	( loadRequest.status == WebEngineLoadRequest.LoadSucceededStatus && (gptWebView.loadProgress == 100 || gptWebView.loadProgress == 0))
+                                        &&
+                                            ( !gptWebView.loading )
 
-				Layout.fillWidth:true
-				Layout.alignment:Qt.AlignBottom
-				inspectedView:enabled ? gptWebView : null
-			}
-	}
+                }
+
+                onJavaScriptConsoleMessage: if(Qt.application.arguments[0] == "plasmoidviewer") {
+                    console.log("Chat-GPT: " + message);
+                }
+
+                onNavigationRequested: if(request.navigationType == WebEngineNavigationRequest.LinkClickedNavigation) {
+                    if(request.url.toString().match(/https?\:\/\/chat\.openai\.com/)) {
+                        gptWebView.url = request.url;
+                    } else {
+                        Qt.openUrlExternally(request.url);
+                        request.action = WebEngineNavigationRequest.IgnoreRequest;
+                    }
+                }
+
+                function isDark(color) {
+                    let luminance = 0.2126 * color.r + 0.7152 * color.g + 0.0722 * color.b;
+                    return (luminance < 0.5);
+                }
+            }
+            WebEngineView {
+                id:gptWebViewInspector
+                enabled: false
+                visible: false
+                z:100
+                height:parent.height /2
+
+                Layout.fillWidth:true
+                Layout.alignment:Qt.AlignBottom
+                inspectedView:enabled ? gptWebView : null
+            }
+    }
 }
 
 
